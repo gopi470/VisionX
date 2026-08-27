@@ -112,26 +112,20 @@ class RefinementModel(nn.Module):
 
 
 def build_refinement_model(
-    encoder_name: str = "tu-convnext_small",
+    encoder_name: str = "convnext_small",
     encoder_weights: str = "imagenet",
     in_channels: int = 4,
     use_boundary_head: bool = True,
 ) -> nn.Module:
     """
     Builds the v2 refinement model:
-      - UNet++ nested decoder (unchanged from v1)
-      - ConvNeXt-Small encoder (v2 default; was ConvNeXt-Large in v1)
-        → fits 1024×1024 crops on a T4 GPU without OOM
-      - Optional BoundaryRefinementHead (Step 4)
-      - 4-channel input with mean-initialised extra channel (Step 3)
-
-    Falls back to efficientnet-b4 if the requested encoder name fails to load.
-
-    Config flag: use_boundary_head (default True; set False for v1 compat).
-    Config flag: in_channels (default 4; set 3 for v1 compat).
+      - UNet / UNet++ decoder
+      - ConvNeXt-Small or ResNet34 backbone
+      - 4-channel input with mean-initialised extra channel
     """
-    def _build(enc_name: str) -> smp.UnetPlusPlus:
-        return smp.UnetPlusPlus(
+    def _build(enc_name: str):
+        # SMP Unet has robust channel matching across timm ConvNeXt backbones
+        return smp.Unet(
             encoder_name=enc_name,
             encoder_weights=encoder_weights,
             in_channels=in_channels,
@@ -141,16 +135,11 @@ def build_refinement_model(
     try:
         base = _build(encoder_name)
     except Exception as e:
-        print(f"  [v2] Encoder '{encoder_name}' failed ({e}), falling back to efficientnet-b4")
-        try:
-            base = _build("efficientnet-b4")
-        except Exception as e2:
-            print(f"  [v2] efficientnet-b4 also failed ({e2}), falling back to resnet34")
-            base = _build("resnet34")
+        print(f"  [v2] Encoder '{encoder_name}' failed ({e}), falling back to resnet34")
+        base = _build("resnet34")
 
-    # Step 3: Mean-initialise the 4th input channel if loading pretrained weights for 3ch
     if in_channels == 4 and encoder_weights is not None:
         _mean_init_extra_channel(base, old_channels=3)
 
-    model = RefinementModel(base, use_boundary_head=use_boundary_head)
-    return model
+    return base
+

@@ -26,24 +26,43 @@ def parse_args():
     return parser.parse_args()
 
 
+def find_test_images_dir(data_root: Path) -> Path:
+    """Flexible dataset path resolver for Kaggle input structures."""
+    candidate_paths = [
+        data_root / "test" / "test_images",
+        data_root / "MAGFiLO_1.0_Kaggle_2026" / "test" / "test_images",
+        data_root / "test_images",
+        Path("/kaggle/input"),
+    ]
+    
+    # Also search recursively in /kaggle/input for test_images directory
+    if Path("/kaggle/input").exists():
+        for p in Path("/kaggle/input").rglob("test_images"):
+            if p.is_dir():
+                return p
+
+    for path in candidate_paths:
+        if path.exists() and path.is_dir():
+            return path
+
+    raise FileNotFoundError(f"Could not locate test_images in {data_root} or /kaggle/input")
+
+
 def main():
     args = parse_args()
     data_root = Path(args.data_root)
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    test_images_dir = data_root / "test" / "test_images"
-    if not test_images_dir.exists():
-        # Fallback check for alternative paths
-        alt_test_dir = data_root / "test_images"
-        if alt_test_dir.exists():
-            test_images_dir = alt_test_dir
-        else:
-            print(f"Test images directory not found at {test_images_dir}")
-            return
+    try:
+        test_images_dir = find_test_images_dir(data_root)
+    except FileNotFoundError as e:
+        print(f"Error: {e}")
+        return
 
     test_image_paths = sorted(list(test_images_dir.glob("*.jpeg"))) + sorted(list(test_images_dir.glob("*.jpg")))
     print(f"Found {len(test_image_paths)} test set images in {test_images_dir}")
+
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Initializing models on device: {device}")

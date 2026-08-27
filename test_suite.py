@@ -1,14 +1,44 @@
 """
 VisionX v2 Unit Test Suite
-Runs without requiring torch/CUDA — only tests pure-Python/numpy logic.
+Runs without requiring torch or segmentation_models_pytorch — mocks missing ML dependencies for fast local execution.
 """
 
 import sys
 import os
+import types
 import numpy as np
 
-# Direct module imports (bypass src/__init__.py which needs torch)
+# Direct module imports (bypass src/__init__.py which needs ML packages)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# Mock torch & segmentation_models_pytorch if not available locally
+if "torch" not in sys.modules or not hasattr(sys.modules["torch"], "no_grad"):
+    mock_torch = types.ModuleType("torch")
+    mock_torch.Tensor = object
+    mock_torch.device = object
+
+    class MockNoGrad:
+        def __call__(self, fn):
+            return fn
+        def __enter__(self): pass
+        def __exit__(self, *a): pass
+
+    mock_torch.no_grad = MockNoGrad
+    mock_torch.nn = types.ModuleType("torch.nn")
+    class MockModule:
+        def __init__(self, *args, **kwargs): pass
+    mock_torch.nn.Module = MockModule
+    mock_torch.nn.functional = types.ModuleType("torch.nn.functional")
+    class MockDataset: pass
+    mock_torch.utils = types.SimpleNamespace(data=types.SimpleNamespace(Dataset=MockDataset))
+    sys.modules["torch"] = mock_torch
+    sys.modules["torch.nn"] = mock_torch.nn
+    sys.modules["torch.nn.functional"] = mock_torch.nn.functional
+    sys.modules["torch.utils"] = mock_torch.utils
+    sys.modules["torch.utils.data"] = mock_torch.utils.data
+
+if "segmentation_models_pytorch" not in sys.modules:
+    sys.modules["segmentation_models_pytorch"] = types.ModuleType("segmentation_models_pytorch")
 
 
 def _hr(title: str):
@@ -69,22 +99,6 @@ print(f"PASS -- No pixel overlap after resolution")
 
 # ── 4. Step 1: Binary mask assertion ─────────────────────────────────────────
 _hr("Test 4: Step 1 -- Binary mask assertion")
-import importlib.util, types
-
-spec = importlib.util.spec_from_file_location("dataset_mod", "src/dataset.py")
-# Mock torch to avoid import error (torch not installed locally)
-mock_torch = types.ModuleType("torch")
-class MockDataset: pass
-mock_torch.utils = types.SimpleNamespace(data=types.SimpleNamespace(Dataset=MockDataset))
-sys.modules.setdefault("torch", mock_torch)
-sys.modules.setdefault("torch.utils", mock_torch.utils)
-sys.modules.setdefault("torch.utils.data", mock_torch.utils.data)
-
-# Also mock segmentation_models_pytorch if not installed
-if "segmentation_models_pytorch" not in sys.modules:
-    sys.modules["segmentation_models_pytorch"] = types.ModuleType("segmentation_models_pytorch")
-
-import cv2
 from src.dataset import _assert_binary, _test_mask_binary_assertion
 _test_mask_binary_assertion()
 
@@ -136,11 +150,9 @@ print("PASS -- V2Config and v1_compat_config fields correct")
 _hr("Test 8: Stratified PQ utility")
 from src.metrics import evaluate_stratified_pq, measure_filament_width, classify_width_bucket
 
-# Thin filament mock: 2px wide, 50px long
 thin = np.zeros((100, 100), dtype=np.uint8)
-thin[49:51, 10:60] = 1  # 2px × 50px strip
+thin[49:51, 10:60] = 1
 
-# Thick filament mock: 10px wide
 thick = np.zeros((100, 100), dtype=np.uint8)
 thick[40:50, 20:70] = 1
 

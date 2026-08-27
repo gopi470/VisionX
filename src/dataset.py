@@ -133,19 +133,25 @@ def _assert_binary(mask: np.ndarray, name: str = "mask") -> None:
 
 def _test_mask_binary_assertion() -> None:
     """Self-test: verify binary assertion catches bilinear-resized masks."""
-    mask = np.eye(8, dtype=np.uint8)
-    # Bilinear resize should create non-binary intermediates
-    resized_bilinear = cv2.resize(mask, (4, 4), interpolation=cv2.INTER_LINEAR)
+    mask_float = np.zeros((8, 8), dtype=np.float32)
+    mask_float[2:6, 2:6] = 1.0
+    mask_float[3:5, 3:5] = 0.0
+    
+    # Linear interpolation on float array produces continuous values between 0.0 and 1.0
+    resized_bilinear = cv2.resize(mask_float, (5, 5), interpolation=cv2.INTER_LINEAR)
     passed = False
     try:
         _assert_binary(resized_bilinear, "bilinear_mask")
     except AssertionError:
         passed = True
-    # Nearest-neighbor should preserve binary
-    resized_nearest = cv2.resize(mask, (4, 4), interpolation=cv2.INTER_NEAREST)
+        
+    mask_uint8 = mask_float.astype(np.uint8)
+    resized_nearest = cv2.resize(mask_uint8, (5, 5), interpolation=cv2.INTER_NEAREST)
     _assert_binary(resized_nearest, "nearest_mask")
     assert passed, "Binary assertion failed to catch bilinear resize"
     print("[Step 1 test] Binary mask assertion: PASSED")
+
+
 
 
 # ── Dataset ───────────────────────────────────────────────────────────────────

@@ -19,12 +19,13 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Train VisionX Refinement Network")
     parser.add_argument("--data_root", type=str, default="MAGFiLO_1.0_Kaggle_2026", help="Path to competition dataset root")
     parser.add_argument("--output_dir", type=str, default="checkpoints", help="Directory to save model checkpoints")
-    parser.add_argument("--epochs", type=int, default=12, help="Number of training epochs")
-    parser.add_argument("--batch_size", type=int, default=8, help="Batch size for training")
+    parser.add_argument("--epochs", type=int, default=40, help="Number of training epochs (extended fine-tuning)")
+    parser.add_argument("--batch_size", type=int, default=4, help="Batch size for training at 1024x1024 high resolution")
     parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate")
-    parser.add_argument("--crop_size", type=int, default=512, help="Crop resolution")
+    parser.add_argument("--crop_size", type=int, default=1024, help="Crop resolution (1024x1024)")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     return parser.parse_args()
+
 
 
 def build_annotation_list(samples):

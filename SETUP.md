@@ -72,14 +72,11 @@ print(os.listdir('/kaggle/input'))
 # in the right panel and search for 'filament-segmentation-2026'!
 ```
 
-#### Cell 3: Execute Inference & Generate Submission CSV
+#### Cell 3: Execute High-Resolution Inference & Generate Submission CSV
 ```python
-# Change directory into VisionX repository folder
-%cd /kaggle/working/VisionX
-
-# Execute inference script
-!python infer.py --output_dir /kaggle/working
+!python /kaggle/working/VisionX/infer.py --crop_size 1024 --output_dir /kaggle/working
 ```
+
 
 
 #### Cell 4: Preview Submission CSV

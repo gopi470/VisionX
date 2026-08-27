@@ -32,41 +32,50 @@ class FilamentSegmentationPipeline:
         h, w = gray_img.shape
         x0, y0, x1, y1 = calculate_crop_bounds(bbox, h, w)
 
-        seed_full = generate_seed_mask(h, w, bbox, pad_ratio=0.40)
-
-        img_crop = cv2.resize(gray_img[y0:y1, x0:x1], (self.crop_size, self.crop_size), interpolation=cv2.INTER_LINEAR)
-        seed_crop = cv2.resize(seed_full[y0:y1, x0:x1], (self.crop_size, self.crop_size), interpolation=cv2.INTER_NEAREST)
-
-        clahe_engine = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        clahe_crop = clahe_engine.apply(img_crop)
-
-        input_tensor = np.stack([img_crop, clahe_crop, seed_crop * 255], axis=0).astype(np.float32) / 255.0
+        # Multi-Pass Box Jitter TTA: Shift candidate seed mask in 5 directions for higher precision
+        shifts = [(0, 0), (8, 0), (-8, 0), (0, 8), (0, -8)]
+        prob_maps = []
 
         mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)[:, None, None]
         std = np.array([0.229, 0.224, 0.225], dtype=np.float32)[:, None, None]
-        input_tensor = (input_tensor - mean) / std
 
-        tensor_b = torch.from_numpy(input_tensor[None]).to(self.device)
-        
-        # Test-Time Augmentation (TTA): Original + Horizontal Flip + Vertical Flip
-        logits_orig = self.refiner(tensor_b)
-        logits_hflip = self.refiner(torch.flip(tensor_b, dims=[3]))
-        logits_vflip = self.refiner(torch.flip(tensor_b, dims=[2]))
+        for dx, dy in shifts:
+            bbox_shifted = [bbox[0] + dx, bbox[1] + dy, bbox[2], bbox[3]]
+            seed_full = generate_seed_mask(h, w, bbox_shifted, pad_ratio=0.40)
 
-        prob_orig = torch.sigmoid(logits_orig)
-        prob_hflip = torch.flip(torch.sigmoid(logits_hflip), dims=[3])
-        prob_vflip = torch.flip(torch.sigmoid(logits_vflip), dims=[2])
+            img_crop = cv2.resize(gray_img[y0:y1, x0:x1], (self.crop_size, self.crop_size), interpolation=cv2.INTER_LINEAR)
+            seed_crop = cv2.resize(seed_full[y0:y1, x0:x1], (self.crop_size, self.crop_size), interpolation=cv2.INTER_NEAREST)
 
-        # Ensembled soft probability map across TTA passes
-        prob_ensemble = (prob_orig + prob_hflip + prob_vflip) / 3.0
-        probs = prob_ensemble[0, 0].cpu().numpy()
+            clahe_engine = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+            clahe_crop = clahe_engine.apply(img_crop)
 
-        binary_crop = (probs >= 0.45).astype(np.uint8)
+            input_tensor = np.stack([img_crop, clahe_crop, seed_crop * 255], axis=0).astype(np.float32) / 255.0
+            input_tensor = (input_tensor - mean) / std
+
+            tensor_b = torch.from_numpy(input_tensor[None]).to(self.device)
+
+            # Horizontal & Vertical Flip TTA passes per shift
+            logits_orig = self.refiner(tensor_b)
+            logits_hflip = self.refiner(torch.flip(tensor_b, dims=[3]))
+            logits_vflip = self.refiner(torch.flip(tensor_b, dims=[2]))
+
+            p_orig = torch.sigmoid(logits_orig)
+            p_hflip = torch.flip(torch.sigmoid(logits_hflip), dims=[3])
+            p_vflip = torch.flip(torch.sigmoid(logits_vflip), dims=[2])
+
+            p_avg = (p_orig + p_hflip + p_vflip) / 3.0
+            prob_maps.append(p_avg[0, 0].cpu().numpy())
+
+        # Average ensemble across all 5 shifted Box Jitter TTA passes
+        probs = float(np.mean(prob_maps, axis=0)) if isinstance(np.mean(prob_maps, axis=0), float) else np.mean(prob_maps, axis=0)
+
+        binary_crop = (probs >= 0.40).astype(np.uint8)
 
         full_mask = np.zeros((h, w), dtype=np.uint8)
         full_mask[y0:y1, x0:x1] = cv2.resize(binary_crop, (x1 - x0, y1 - y0), interpolation=cv2.INTER_NEAREST)
 
         return full_mask, float(conf)
+
 
 
     def predict_image(self, image_path: Path) -> list[np.ndarray]:

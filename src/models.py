@@ -102,16 +102,13 @@ class RefinementModel(nn.Module):
             self.boundary_head = None
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # SMP UNet++ forward: returns (logits, decoder_features) when aux_params set,
-        # or just logits when default. We hook into the decoder output via a separate pass.
         if self.use_boundary_head and self.boundary_head is not None:
-            # Extract intermediate decoder features for boundary head
-            # SMP models expose encoder/decoder separately via model.encoder / model.decoder
             features = self.base.encoder(x)
-            decoder_output = self.base.decoder(*features)          # (B, 16, H, W)
+            decoder_output = self.base.decoder(features)          # (B, 16, H, W)
             base_logits = self.base.segmentation_head(decoder_output)  # (B, 1, H, W)
             return self.boundary_head(decoder_output, base_logits)
         return self.base(x)
+
 
 
 def build_refinement_model(

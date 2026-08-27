@@ -3,12 +3,17 @@ VisionX Dataset Loader & Cropped Refinement Dataset
 """
 
 import math
-import random
 import cv2
 import numpy as np
 import torch
 from torch.utils.data import Dataset
 from src.utils import polygon_to_mask
+
+try:
+    import albumentations as A
+    _ALBUMENTATIONS_AVAILABLE = True
+except ImportError:
+    _ALBUMENTATIONS_AVAILABLE = False
 
 
 def calculate_crop_bounds(bbox: list[float], img_h: int, img_w: int, context_scale: float = 1.5, min_size: int = 96):
@@ -66,6 +71,24 @@ class RefineDataset(Dataset):
         self.augment = augment
         self._image_cache = {}
 
+        # Enhancement: Rich augmentation pipeline using albumentations
+        if augment and _ALBUMENTATIONS_AVAILABLE:
+            self.aug_pipeline = A.Compose(
+                [
+                    A.RandomRotate90(p=0.5),
+                    A.HorizontalFlip(p=0.5),
+                    A.VerticalFlip(p=0.5),
+                    A.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.15, rotate_limit=180, border_mode=cv2.BORDER_REFLECT_101, p=0.6),
+                    A.RandomBrightnessContrast(brightness_limit=0.20, contrast_limit=0.20, p=0.5),
+                    A.ElasticTransform(alpha=80, sigma=8, p=0.3),
+                    A.GridDistortion(num_steps=4, distort_limit=0.2, p=0.25),
+                    A.CoarseDropout(num_holes_range=(1, 4), hole_height_range=(20, 40), hole_width_range=(20, 40), fill=0, p=0.25),
+                ],
+                additional_targets={"clahe": "image", "mask": "mask", "seed": "mask"},
+            )
+        else:
+            self.aug_pipeline = None
+
     def __len__(self):
         return len(self.annotation_samples)
 
@@ -94,17 +117,36 @@ class RefineDataset(Dataset):
         gt_crop = cv2.resize(gt_mask[y0:y1, x0:x1], (self.crop_size, self.crop_size), interpolation=cv2.INTER_NEAREST)
         seed_crop = cv2.resize(seed_mask[y0:y1, x0:x1], (self.crop_size, self.crop_size), interpolation=cv2.INTER_NEAREST)
 
-        # Generate CLAHE channel
+        # Generate CLAHE channel (clipLimit=2.0 — consistent with pipeline.py after Bug #5 fix)
         clahe_engine = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         clahe_crop = clahe_engine.apply(img_crop)
 
-        # Random Flips Augmentation
-        if self.augment and random.random() < 0.5:
-            img_crop, clahe_crop = np.fliplr(img_crop).copy(), np.fliplr(clahe_crop).copy()
-            gt_crop, seed_crop = np.fliplr(gt_crop).copy(), np.fliplr(seed_crop).copy()
-        if self.augment and random.random() < 0.5:
-            img_crop, clahe_crop = np.flipud(img_crop).copy(), np.flipud(clahe_crop).copy()
-            gt_crop, seed_crop = np.flipud(gt_crop).copy(), np.flipud(seed_crop).copy()
+        # Enhancement: Rich albumentations augmentation or fallback simple flips
+        if self.augment:
+            if self.aug_pipeline is not None:
+                augmented = self.aug_pipeline(
+                    image=img_crop,
+                    clahe=clahe_crop,
+                    mask=gt_crop,
+                    seed=seed_crop,
+                )
+                img_crop = augmented["image"]
+                clahe_crop = augmented["clahe"]
+                gt_crop = augmented["mask"]
+                seed_crop = augmented["seed"]
+            else:
+                # Fallback: simple flips if albumentations not installed
+                import random
+                if random.random() < 0.5:
+                    img_crop = np.fliplr(img_crop).copy()
+                    clahe_crop = np.fliplr(clahe_crop).copy()
+                    gt_crop = np.fliplr(gt_crop).copy()
+                    seed_crop = np.fliplr(seed_crop).copy()
+                if random.random() < 0.5:
+                    img_crop = np.flipud(img_crop).copy()
+                    clahe_crop = np.flipud(clahe_crop).copy()
+                    gt_crop = np.flipud(gt_crop).copy()
+                    seed_crop = np.flipud(seed_crop).copy()
 
         # Stack into 3-channel tensor
         input_tensor = np.stack([img_crop, clahe_crop, seed_crop * 255], axis=0).astype(np.float32) / 255.0

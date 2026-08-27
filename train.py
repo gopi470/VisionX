@@ -19,10 +19,13 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Train VisionX Refinement Network")
     parser.add_argument("--data_root", type=str, default="MAGFiLO_1.0_Kaggle_2026", help="Path to competition dataset root")
     parser.add_argument("--output_dir", type=str, default="checkpoints", help="Directory to save model checkpoints")
-    parser.add_argument("--epochs", type=int, default=40, help="Number of training epochs (extended fine-tuning)")
-    parser.add_argument("--batch_size", type=int, default=4, help="Batch size for training at 1024x1024 high resolution")
+    parser.add_argument("--epochs", type=int, default=40, help="Number of training epochs")
+    parser.add_argument("--batch_size", type=int, default=4, help="Batch size for training at 1024x1024")
     parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate")
     parser.add_argument("--crop_size", type=int, default=1024, help="Crop resolution (1024x1024)")
+    # BUG FIX #4: Add --encoder_name so this matches the architecture used in infer.py
+    parser.add_argument("--encoder_name", type=str, default="tu-convnext_large",
+                        help="Encoder backbone for U-Net++ (e.g. tu-convnext_large, efficientnet-b7, resnet34)")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     return parser.parse_args()
 
@@ -72,7 +75,9 @@ def main():
     val_loader = DataLoader(val_ds, batch_size=args.batch_size * 2, shuffle=False, num_workers=2, pin_memory=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = build_refinement_model(encoder_name="resnet34", encoder_weights="imagenet", in_channels=3).to(device)
+    # BUG FIX #4: Use args.encoder_name (was hardcoded 'resnet34' — caused train/infer checkpoint mismatch)
+    print(f"Building model with encoder: {args.encoder_name}")
+    model = build_refinement_model(encoder_name=args.encoder_name, encoder_weights="imagenet", in_channels=3).to(device)
 
     criterion = CombinedBCEDiceLoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)

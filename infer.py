@@ -21,7 +21,10 @@ def parse_args():
     parser.add_argument("--output_dir", type=str, default=".", help="Output directory for submission.csv")
     parser.add_argument("--detector_weights", type=str, default="yolo11s.pt", help="Path or name of detector weights")
     parser.add_argument("--refiner_weights", type=str, default=None, help="Path to refiner weights (.pt)")
-    parser.add_argument("--crop_size", type=int, default=1024, help="Refinement crop resolution (1024x1024)")
+    # BUG FIX #1 & #4: Add --encoder_name so train.py and infer.py always use the same architecture
+    parser.add_argument("--encoder_name", type=str, default="tu-convnext_large",
+                        help="Encoder backbone for U-Net++ (must match the backbone used during training)")
+    parser.add_argument("--crop_size", type=int, default=1024, help="Refinement crop resolution (e.g. 1024)")
     parser.add_argument("--conf_threshold", type=float, default=0.15, help="Detector confidence threshold")
     parser.add_argument("--iou_threshold", type=float, default=0.45, help="Detector NMS IoU threshold")
     return parser.parse_args()
@@ -68,17 +71,24 @@ def main():
 
     detector = YOLO(args.detector_weights)
 
-    refiner = build_refinement_model(encoder_name="resnet34", encoder_weights=None if args.refiner_weights else "imagenet", in_channels=3)
+    # BUG FIX #1: Use args.encoder_name so architecture always matches the saved checkpoint
+    refiner = build_refinement_model(
+        encoder_name=args.encoder_name,
+        encoder_weights=None if args.refiner_weights else "imagenet",
+        in_channels=3,
+    )
     if args.refiner_weights and Path(args.refiner_weights).exists():
         print(f"Loading refiner weights from {args.refiner_weights}")
         state = torch.load(args.refiner_weights, map_location=device, weights_only=False)
         model_state = state["model"] if isinstance(state, dict) and "model" in state else state
         refiner.load_state_dict(model_state)
 
+    # BUG FIX #2: Forward crop_size to the pipeline (was silently ignored before)
     pipeline = FilamentSegmentationPipeline(
         detector_model=detector,
         refiner_model=refiner,
         device=device,
+        crop_size=args.crop_size,
         conf_threshold=args.conf_threshold,
         iou_threshold=args.iou_threshold,
     )

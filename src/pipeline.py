@@ -9,7 +9,7 @@ import numpy as np
 import torch
 
 from src.dataset import calculate_crop_bounds, generate_seed_mask
-from src.postprocess import resolve_mask_overlaps
+from src.postprocess import resolve_mask_overlaps, apply_morphological_cleaning
 
 
 class FilamentSegmentationPipeline:
@@ -46,7 +46,7 @@ class FilamentSegmentationPipeline:
             img_crop = cv2.resize(gray_img[y0:y1, x0:x1], (self.crop_size, self.crop_size), interpolation=cv2.INTER_LINEAR)
             seed_crop = cv2.resize(seed_full[y0:y1, x0:x1], (self.crop_size, self.crop_size), interpolation=cv2.INTER_NEAREST)
 
-            clahe_engine = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+            clahe_engine = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))  # BUG FIX #5: match training clipLimit=2.0
             clahe_crop = clahe_engine.apply(img_crop)
 
             input_tensor = np.stack([img_crop, clahe_crop, seed_crop * 255], axis=0).astype(np.float32) / 255.0
@@ -66,10 +66,18 @@ class FilamentSegmentationPipeline:
             p_avg = (p_orig + p_hflip + p_vflip) / 3.0
             prob_maps.append(p_avg[0, 0].cpu().numpy())
 
-        # Average ensemble across all 5 shifted Box Jitter TTA passes
-        probs = float(np.mean(prob_maps, axis=0)) if isinstance(np.mean(prob_maps, axis=0), float) else np.mean(prob_maps, axis=0)
+        # BUG FIX #3: Replace fragile isinstance guard with clean stack+mean
+        probs = np.mean(np.stack(prob_maps, axis=0), axis=0)  # shape: (crop_size, crop_size)
 
-        binary_crop = (probs >= 0.40).astype(np.uint8)
+        # Enhancement: Otsu adaptive threshold instead of fixed 0.40 for self-calibrating crops
+        probs_uint8 = (probs * 255).astype(np.uint8)
+        otsu_thresh, _ = cv2.threshold(probs_uint8, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        # Clamp Otsu to a reasonable range so we never over/under-threshold
+        adaptive_thresh = float(max(0.30, min(0.55, otsu_thresh / 255.0)))
+        binary_crop = (probs >= adaptive_thresh).astype(np.uint8)
+
+        # Enhancement: Apply morphological open→close to remove speckles and fill holes
+        binary_crop = apply_morphological_cleaning(binary_crop, kernel_size=5)
 
         full_mask = np.zeros((h, w), dtype=np.uint8)
         full_mask[y0:y1, x0:x1] = cv2.resize(binary_crop, (x1 - x0, y1 - y0), interpolation=cv2.INTER_NEAREST)

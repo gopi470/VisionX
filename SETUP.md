@@ -74,9 +74,13 @@ print(os.listdir('/kaggle/input'))
 
 #### Cell 3: Execute Inference & Generate Submission CSV
 ```python
-# Adjust the dataset path according to what was printed in Cell 2
-!python infer.py --data_root /kaggle/input/filament-segmentation-2026/MAGFiLO_1.0_Kaggle_2026 --output_dir /kaggle/working
+# Change directory into VisionX repository folder
+%cd /kaggle/working/VisionX
+
+# Execute inference script
+!python infer.py --output_dir /kaggle/working
 ```
+
 
 #### Cell 4: Preview Submission CSV
 ```python

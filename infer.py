@@ -27,7 +27,7 @@ def parse_args():
 
 
 def find_test_images_dir(data_root: Path) -> Path:
-    """Flexible dataset path resolver for Kaggle input structures."""
+    """Flexible dataset path resolver for Kaggle input structures (datasets & competitions)."""
     search_roots = [data_root, Path("/kaggle/input")]
     
     for root in search_roots:
@@ -39,6 +39,7 @@ def find_test_images_dir(data_root: Path) -> Path:
                         return p
 
     raise FileNotFoundError(f"Could not locate test_images directory containing images in {data_root} or /kaggle/input")
+
 
 
 

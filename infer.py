@@ -19,11 +19,12 @@ def parse_args():
     parser = argparse.ArgumentParser(description="VisionX Test Set Inference & Submission Generator")
     parser.add_argument("--data_root", type=str, default="MAGFiLO_1.0_Kaggle_2026", help="Path to competition dataset root")
     parser.add_argument("--output_dir", type=str, default=".", help="Output directory for submission.csv")
-    parser.add_argument("--detector_weights", type=str, default="yolov8n.pt", help="Path or name of detector weights")
+    parser.add_argument("--detector_weights", type=str, default="yolo11s.pt", help="Path or name of detector weights (e.g. yolo11s.pt or fine-tuned weights)")
     parser.add_argument("--refiner_weights", type=str, default=None, help="Path to refiner weights (.pt)")
-    parser.add_argument("--conf_threshold", type=float, default=0.28, help="Detector confidence threshold")
-    parser.add_argument("--iou_threshold", type=float, default=0.50, help="Detector NMS IoU threshold")
+    parser.add_argument("--conf_threshold", type=float, default=0.15, help="Detector confidence threshold (lower threshold for higher recall)")
+    parser.add_argument("--iou_threshold", type=float, default=0.45, help="Detector NMS IoU threshold")
     return parser.parse_args()
+
 
 
 def find_test_images_dir(data_root: Path) -> Path:

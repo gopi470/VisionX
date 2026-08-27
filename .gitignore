@@ -82,3 +82,5 @@ outputs/
 *.pth
 *.pt
 *.onnx
+
+antigravity_logs.md

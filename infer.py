@@ -28,22 +28,18 @@ def parse_args():
 
 def find_test_images_dir(data_root: Path) -> Path:
     """Flexible dataset path resolver for Kaggle input structures."""
-    if Path("/kaggle/input").exists():
-        for p in Path("/kaggle/input").rglob("*"):
-            if p.is_dir() and p.name in ("test_images", "test") and list(p.glob("*.jpeg")) + list(p.glob("*.jpg")):
-                return p
+    search_roots = [data_root, Path("/kaggle/input")]
+    
+    for root in search_roots:
+        if root.exists():
+            for p in root.rglob("*"):
+                if p.is_dir() and p.name in ("test_images", "test"):
+                    imgs = list(p.glob("*.jpeg")) + list(p.glob("*.jpg")) + list(p.glob("*.JPEG")) + list(p.glob("*.JPG"))
+                    if len(imgs) > 0:
+                        return p
 
-    candidate_paths = [
-        data_root / "test" / "test_images",
-        data_root / "MAGFiLO_1.0_Kaggle_2026" / "test" / "test_images",
-        data_root / "test_images",
-    ]
+    raise FileNotFoundError(f"Could not locate test_images directory containing images in {data_root} or /kaggle/input")
 
-    for path in candidate_paths:
-        if path.exists() and path.is_dir():
-            return path
-
-    raise FileNotFoundError(f"Could not locate test_images containing jpeg/jpg images in {data_root} or /kaggle/input")
 
 
 

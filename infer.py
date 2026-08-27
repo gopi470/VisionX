@@ -125,13 +125,15 @@ def main():
         print(f"Error: {e}")
         return
 
-    test_image_paths = (
-        sorted(test_images_dir.glob("*.jpeg"))
-        + sorted(test_images_dir.glob("*.jpg"))
-        + sorted(test_images_dir.glob("*.JPEG"))
-        + sorted(test_images_dir.glob("*.JPG"))
+    raw_paths = (
+        list(test_images_dir.glob("*.jpeg"))
+        + list(test_images_dir.glob("*.jpg"))
+        + list(test_images_dir.glob("*.JPEG"))
+        + list(test_images_dir.glob("*.JPG"))
     )
-    print(f"Found {len(test_image_paths)} test images in {test_images_dir}")
+    # Deduplicate while preserving deterministic path sorting
+    test_image_paths = sorted(list({p.resolve(): p for p in raw_paths}.values()))
+    print(f"Found {len(test_image_paths)} unique test images in {test_images_dir}")
 
     # ── Step 5: Pre-run budget check ─────────────────────────────────────────
     estimated_sec = estimate_inference_time(

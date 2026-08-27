@@ -310,17 +310,21 @@ class FilamentSegmentationPipeline:
             if int(mask.sum()) >= self.cfg.min_mask_area:
                 scored_candidates.append((score, mask))
 
-        # ── Step 7: Correct execution order ───────────────────────────────────
-        # prob-map avg (inside _tta_forward) → Otsu thresh → morphological clean
-        # → resolve_mask_overlaps → repair_filament_gaps → RLE (in infer.py)
-        resolved = resolve_mask_overlaps(scored_candidates, min_area=self.cfg.min_mask_area)
-
+        # ── Step 7: Correct execution order to prevent overlapping masks ───
+        # prob-map avg → Otsu thresh → morphological clean
+        # → repair_filament_gaps (per candidate crop) → resolve_mask_overlaps → RLE
         if self.cfg.use_skeleton_repair:
-            resolved = [repair_filament_gaps(m, gap_px=self.cfg.skeleton_gap_px) for m in resolved]
-            # Re-filter any masks that shrank below min area after repair
-            resolved = [m for m in resolved if int(m.sum()) >= self.cfg.min_mask_area]
+            repaired_candidates = []
+            for score, mask in scored_candidates:
+                repaired = repair_filament_gaps(mask, gap_px=self.cfg.skeleton_gap_px)
+                if int(repaired.sum()) >= self.cfg.min_mask_area:
+                    repaired_candidates.append((score, repaired))
+            scored_candidates = repaired_candidates
 
+        # resolve_mask_overlaps runs LAST to guarantee ZERO overlapping pixels
+        resolved = resolve_mask_overlaps(scored_candidates, min_area=self.cfg.min_mask_area)
         return resolved
+
 
 
 # ── Step 5: Runtime utilities ─────────────────────────────────────────────────
@@ -467,11 +471,14 @@ class EnsemblePipeline:
 
             full_mask = np.zeros((h, w), dtype=np.uint8)
             full_mask[y0:y1_c, x0:x1_c] = cv2.resize(binary_crop, (x1_c - x0, y1_c - y0), interpolation=cv2.INTER_NEAREST)
-            if int(full_mask.sum()) >= cfg.min_mask_area:
-                scored_candidates.append((conf_val, full_mask))
+        if cfg.use_skeleton_repair:
+            repaired_candidates = []
+            for score, mask in scored_candidates:
+                repaired = repair_filament_gaps(mask, gap_px=cfg.skeleton_gap_px)
+                if int(repaired.sum()) >= cfg.min_mask_area:
+                    repaired_candidates.append((score, repaired))
+            scored_candidates = repaired_candidates
 
         resolved = resolve_mask_overlaps(scored_candidates, min_area=cfg.min_mask_area)
-        if cfg.use_skeleton_repair:
-            resolved = [repair_filament_gaps(m, gap_px=cfg.skeleton_gap_px) for m in resolved]
-            resolved = [m for m in resolved if int(m.sum()) >= cfg.min_mask_area]
         return resolved
+

@@ -46,15 +46,27 @@ class FilamentSegmentationPipeline:
         input_tensor = (input_tensor - mean) / std
 
         tensor_b = torch.from_numpy(input_tensor[None]).to(self.device)
-        logits = self.refiner(tensor_b)
-        probs = torch.sigmoid(logits)[0, 0].cpu().numpy()
+        
+        # Test-Time Augmentation (TTA): Original + Horizontal Flip + Vertical Flip
+        logits_orig = self.refiner(tensor_b)
+        logits_hflip = self.refiner(torch.flip(tensor_b, dims=[3]))
+        logits_vflip = self.refiner(torch.flip(tensor_b, dims=[2]))
 
-        binary_crop = (probs >= 0.50).astype(np.uint8)
+        prob_orig = torch.sigmoid(logits_orig)
+        prob_hflip = torch.flip(torch.sigmoid(logits_hflip), dims=[3])
+        prob_vflip = torch.flip(torch.sigmoid(logits_vflip), dims=[2])
+
+        # Ensembled soft probability map across TTA passes
+        prob_ensemble = (prob_orig + prob_hflip + prob_vflip) / 3.0
+        probs = prob_ensemble[0, 0].cpu().numpy()
+
+        binary_crop = (probs >= 0.45).astype(np.uint8)
 
         full_mask = np.zeros((h, w), dtype=np.uint8)
         full_mask[y0:y1, x0:x1] = cv2.resize(binary_crop, (x1 - x0, y1 - y0), interpolation=cv2.INTER_NEAREST)
 
         return full_mask, float(conf)
+
 
     def predict_image(self, image_path: Path) -> list[np.ndarray]:
         gray_img = cv2.imread(str(image_path), cv2.IMREAD_GRAYSCALE)

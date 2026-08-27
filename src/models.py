@@ -30,9 +30,9 @@ class CombinedBCEDiceLoss(nn.Module):
         return self.bce_weight * bce_loss + self.dice_weight * dice_loss
 
 
-def build_refinement_model(encoder_name: str = "resnet34", encoder_weights: str = "imagenet", in_channels: int = 3) -> nn.Module:
+def build_refinement_model(encoder_name: str = "efficientnet-b4", encoder_weights: str = "imagenet", in_channels: int = 3) -> nn.Module:
     """
-    Constructs a U-Net segmentation network with pre-trained encoder weights.
+    Constructs a high-capacity U-Net segmentation network with heavy pre-trained backbones (e.g. EfficientNet-B4 / ConvNeXt).
     """
     model = smp.Unet(
         encoder_name=encoder_name,
@@ -41,3 +41,4 @@ def build_refinement_model(encoder_name: str = "resnet34", encoder_weights: str 
         classes=1,
     )
     return model
+

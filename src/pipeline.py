@@ -16,15 +16,16 @@ class FilamentSegmentationPipeline:
     """
     End-to-End Two-Stage Cascade Inference Pipeline.
     Stage 1: Object Detector (YOLO or Region Proposal)
-    Stage 2: Cropped Refinement UNet
+    Stage 2: Cropped Refinement Network (U-Net++ ConvNeXt Large at 1024x1024 resolution)
     """
-    def __init__(self, detector_model, refiner_model, device: torch.device, crop_size: int = 512, conf_threshold: float = 0.28, iou_threshold: float = 0.50):
+    def __init__(self, detector_model, refiner_model, device: torch.device, crop_size: int = 1024, conf_threshold: float = 0.15, iou_threshold: float = 0.45):
         self.detector = detector_model
         self.refiner = refiner_model.to(device).eval()
         self.device = device
         self.crop_size = crop_size
         self.conf_threshold = conf_threshold
         self.iou_threshold = iou_threshold
+
 
     @torch.no_grad()
     def _refine_crop(self, gray_img: np.ndarray, bbox: list[float], conf: float) -> tuple[np.ndarray, float]:

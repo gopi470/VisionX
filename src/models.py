@@ -30,15 +30,26 @@ class CombinedBCEDiceLoss(nn.Module):
         return self.bce_weight * bce_loss + self.dice_weight * dice_loss
 
 
-def build_refinement_model(encoder_name: str = "efficientnet-b4", encoder_weights: str = "imagenet", in_channels: int = 3) -> nn.Module:
+def build_refinement_model(encoder_name: str = "tu-convnext_large", encoder_weights: str = "imagenet", in_channels: int = 3) -> nn.Module:
     """
-    Constructs a high-capacity U-Net segmentation network with heavy pre-trained backbones (e.g. EfficientNet-B4 / ConvNeXt).
+    Constructs a SOTA U-Net++ (Nested U-Net) architecture with heavy ConvNeXt Large / Swin backbone
+    for maximum feature extraction capability and boundary precision.
     """
-    model = smp.Unet(
-        encoder_name=encoder_name,
-        encoder_weights=encoder_weights,
-        in_channels=in_channels,
-        classes=1,
-    )
+    try:
+        model = smp.UnetPlusPlus(
+            encoder_name=encoder_name,
+            encoder_weights=encoder_weights,
+            in_channels=in_channels,
+            classes=1,
+        )
+    except Exception:
+        # Fallback to EfficientNet-B7 if timm convnext weights are loading offline
+        model = smp.UnetPlusPlus(
+            encoder_name="efficientnet-b7",
+            encoder_weights=encoder_weights,
+            in_channels=in_channels,
+            classes=1,
+        )
     return model
+
 

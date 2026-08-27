@@ -40,8 +40,8 @@ def parse_args():
     p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--seed", type=int, default=42)
     # V2Config overrides
-    p.add_argument("--encoder_name", default="tu-convnext_small",
-                   help="Encoder backbone. v2 default: tu-convnext_small")
+    p.add_argument("--encoder_name", default="convnext_small",
+                   help="Encoder backbone. v2 default: convnext_small")
     p.add_argument("--no_boundary_head", action="store_true",
                    help="Disable boundary refinement head (v1-compat mode)")
     p.add_argument("--no_ema", action="store_true", help="Disable EMA")

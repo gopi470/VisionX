@@ -31,7 +31,7 @@ def parse_args():
     p.add_argument("--output_dir", default=".")
     p.add_argument("--detector_weights", default="yolo11s.pt")
     p.add_argument("--refiner_weights", default=None)
-    p.add_argument("--encoder_name", default="tu-convnext_small",
+    p.add_argument("--encoder_name", default="convnext_small",
                    help="Must match the backbone used during training")
     p.add_argument("--in_channels", type=int, default=4,
                    help="4 = v2 (distance-transform channel), 3 = v1-compat")

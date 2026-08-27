@@ -33,9 +33,9 @@ class V2Config:
     use_distance_transform: bool = True
 
     # ── Step 4: Architecture & training ──────────────────────────────────────
-    # Encoder backbone — "tu-convnext_small" is the v2 default;
+    # Encoder backbone — "convnext_small" is the v2 default;
     # use "hrnet_w32" if timm supports it in the running environment
-    encoder_name: str = "tu-convnext_small"
+    encoder_name: str = "convnext_small"
     # Lightweight boundary-sharpening conv head on top of decoder
     use_boundary_head: bool = True
     # Loss weights (must sum to 1.0)

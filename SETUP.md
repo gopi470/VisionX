@@ -23,26 +23,73 @@ pip install -r requirements.txt
 
 ---
 
-## 2. Running on Kaggle Notebooks (Recommended)
+## 2. Running on Kaggle Notebooks (Detailed Step-by-Step Guide)
 
-### Step 1: Attach Dataset
-1. Open your Kaggle Notebook.
-2. In the right panel, click **+ Add Data**.
-3. Search for and attach the competition dataset: `filament-segmentation-2026` or `MAGFiLO_1.0_Kaggle_2026`.
-4. Ensure dataset path is mounted under `/kaggle/input/MAGFiLO_1.0_Kaggle_2026/` or `/kaggle/input/solarfilament/MAGFiLO_1.0_Kaggle_2026/`.
+### Step 1: Create a New Kaggle Notebook
+1. Open your browser and go to [kaggle.com](https://www.kaggle.com).
+2. Log into your Kaggle account.
+3. On the left sidebar, click the **+ Create** button (or go to [kaggle.com/code](https://www.kaggle.com/code) and click **New Notebook**).
+4. A new blank Jupyter Notebook editor will open.
 
-### Step 2: Environment Options
-1. Set **Accelerator** to **GPU P100** or **T4 (Dual)**.
-2. Set **Internet** to **On** (if installing packages dynamically).
+---
 
-### Step 3: Execution
-Run the complete pipeline notebook or Python script:
+### Step 2: Attach the Competition Dataset
+1. In the right-hand panel of the Notebook interface, locate the **Input** section.
+2. Click the **+ Add Data** button at the top right of that panel.
+3. A search modal will appear. In the search box:
+   - Search for `filament-segmentation-2026` or `Solar Filament Segmentation Challenge 2026`.
+   - Alternatively, search for `MAGFiLO_1.0_Kaggle_2026`.
+4. Click the **+** (Add) button next to the dataset.
+5. Close the search panel. You will now see the dataset listed under **Input** in the right panel (usually at `/kaggle/input/filament-segmentation-2026` or `/kaggle/input/solarfilament/...`).
+
+---
+
+### Step 3: Configure GPU & Internet Settings
+1. In the right-hand panel under **Notebook Options**:
+2. Find the **Session options** or **Accelerator** dropdown:
+   - Change **Accelerator** from `None` to **GPU T4 x2** or **GPU P100**.
+3. Find the **Internet** toggle switch:
+   - Switch **Internet** to **On** (this allows the notebook to clone GitHub repositories and install pip packages).
+4. If prompted to restart the session, click **Confirm / Restart**.
+
+---
+
+### Step 4: Run Code Cells in Kaggle
+
+#### Cell 1: Clone Repository & Install Packages
 ```python
-# In Kaggle Notebook Cell:
-!python infer.py --data_root /kaggle/input/MAGFiLO_1.0_Kaggle_2026 --output_dir /kaggle/working
+!git clone https://github.com/gopi470/VisionX.git
+%cd VisionX
+!pip install -q -r requirements.txt
 ```
 
-This generates `submission.csv` in `/kaggle/working/submission.csv` ready for direct submission.
+#### Cell 2: Verify Input Dataset Path
+```python
+import os
+print("Mounted input folders:")
+print(os.listdir('/kaggle/input'))
+# Note: If this prints ['notebooks'] only, you still need to click '+ Add Input' 
+# in the right panel and search for 'filament-segmentation-2026'!
+```
+
+#### Cell 3: Execute Inference & Generate Submission CSV
+```python
+# Adjust the dataset path according to what was printed in Cell 2
+!python infer.py --data_root /kaggle/input/filament-segmentation-2026/MAGFiLO_1.0_Kaggle_2026 --output_dir /kaggle/working
+```
+
+#### Cell 4: Preview Submission CSV
+```python
+import pandas as pd
+sub_path = '/kaggle/working/submission.csv'
+if os.path.exists(sub_path):
+    sub = pd.read_csv(sub_path)
+    print(f"Submission generated successfully! Total rows: {len(sub)}")
+    display(sub.head(10))
+else:
+    print("Submission file not found yet. Check logs above.")
+```
+
 
 ---
 

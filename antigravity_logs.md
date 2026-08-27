@@ -29,7 +29,11 @@
 - Explained license terms (CC BY-NC 4.0 for dataset vs MIT for code) and NSO data source attribution rules.
 - Expanded [`READMEext.md`](file:///c:/Users/HP/Documents/repos_collab/VisionX/READMEext.md) into an **Ultimate Beginner-to-Expert Guide** containing table of contents, space weather hazard threats (CMEs), step-by-step 2-stage cascade explanations, Panoptic Quality math breakdown ($PQ = SQ \times RQ$), repository tour, and Kaggle/local execution instructions.
 - Embedded real GONG solar dataset image with proper CC BY 4.0 attribution (`NSO/AURA/NSF`) and fixed callout box formatting.
-- Outlined actionable Next Steps checklist for git commit, push, and Kaggle submission execution.
+- Pushed initial commit and automatic dataset path resolution patch (`infer.py`) to GitHub (`https://github.com/gopi470/VisionX.git`).
+- Resolved Kaggle dataset path error by adding recursive auto-discovery in `infer.py` to automatically detect `/kaggle/input/.../test_images` regardless of mount folder names.
+
+
+
 
 
 

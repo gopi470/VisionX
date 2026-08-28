@@ -318,10 +318,14 @@ class FilamentSegmentationPipeline:
             mask, score = self._refine_crop(gray_img, bbox, conf_val)
             if int(mask.sum()) >= self.cfg.min_mask_area:
                 scored_candidates.append((score, mask))
+            else:
+                # High-recall fallback: if refiner returned 0 pixels on a candidate box,
+                # use the raw seed mask inside the box as a candidate
+                seed_mask = generate_seed_mask(gray_img.shape[0], gray_img.shape[1], bbox, pad_ratio=0.10)
+                if int(seed_mask.sum()) >= self.cfg.min_mask_area:
+                    scored_candidates.append((conf_val * 0.5, seed_mask))
 
         # ── Step 7: Correct execution order to prevent overlapping masks ───
-        # prob-map avg → Otsu thresh → morphological clean
-        # → repair_filament_gaps (per candidate crop) → resolve_mask_overlaps → RLE
         if self.cfg.use_skeleton_repair:
             repaired_candidates = []
             for score, mask in scored_candidates:
@@ -332,7 +336,16 @@ class FilamentSegmentationPipeline:
 
         # resolve_mask_overlaps runs LAST to guarantee ZERO overlapping pixels
         resolved = resolve_mask_overlaps(scored_candidates, min_area=self.cfg.min_mask_area)
+
+        # Safety Fallback: Guarantee at least one valid prediction per image so PQ > 0
+        if len(resolved) == 0 and len(path_a_boxes) > 0:
+            best_box = sorted(path_a_boxes, key=lambda b: -b[4])[0][:4]
+            fb_mask = generate_seed_mask(gray_img.shape[0], gray_img.shape[1], best_box, pad_ratio=0.10)
+            if int(fb_mask.sum()) >= self.cfg.min_mask_area:
+                resolved = [fb_mask]
+
         return resolved
+
 
 
 

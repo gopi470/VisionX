@@ -226,16 +226,24 @@ class FilamentSegmentationPipeline:
     def _path_b_candidates(self, gray_img: np.ndarray) -> list:
         """
         Always-on CLAHE + adaptive-threshold + connected-components candidate extractor.
+        Extracts dark solar filament structures on the solar disk.
         Returns list of [x, y, w, h, conf=0.40] boxes.
         """
         blurred = cv2.GaussianBlur(gray_img, (15, 15), 0)
-        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8)).apply(blurred)
-        mean_val = float(np.mean(clahe))
-        _, dark_mask = cv2.threshold(
-            clahe, int(mean_val * 0.65), 255, cv2.THRESH_BINARY_INV,
-        )
-        disc_mask = (blurred > 30).astype(np.uint8)
-        dark_mask = cv2.bitwise_and(dark_mask, dark_mask, mask=disc_mask)
+        # Identify solar disk mask (exclude dark space background)
+        disk_mask = (blurred > 45).astype(np.uint8)
+        if disk_mask.sum() == 0:
+            return []
+
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8)).apply(gray_img)
+        
+        # Calculate mean brightness strictly within the solar disk
+        mean_disk = float(np.mean(clahe[disk_mask > 0]))
+        # Solar filaments are dark features (intensity significantly lower than disk average)
+        dark_thresh = int(mean_disk * 0.70)
+        
+        _, dark_mask = cv2.threshold(clahe, dark_thresh, 255, cv2.THRESH_BINARY_INV)
+        dark_mask = cv2.bitwise_and(dark_mask, dark_mask, mask=disk_mask)
 
         num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(dark_mask, connectivity=8)
         boxes = []
@@ -248,6 +256,7 @@ class FilamentSegmentationPipeline:
                 bh = stats[lbl, cv2.CC_STAT_HEIGHT]
                 boxes.append([float(bx), float(by), float(bw), float(bh), 0.40])
         return boxes
+
 
     # ── Main predict ──────────────────────────────────────────────────────────
 

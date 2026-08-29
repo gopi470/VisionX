@@ -13,19 +13,38 @@ from pycocotools import mask as mask_utils
 
 def encode_rle(binary_mask: np.ndarray) -> str:
     """
-    Encodes a 2D binary numpy array into COCO RLE string format.
+    Encodes a 2D binary numpy array into Kaggle standard space-separated 1-indexed RLE string format.
+    Column-first (Fortran) ordering standard for Kaggle vision competitions.
     """
-    fortran_mask = np.asfortranarray(binary_mask.astype(np.uint8))
-    rle = mask_utils.encode(fortran_mask)
-    return rle["counts"].decode("utf-8")
+    pixels = binary_mask.T.flatten()
+    pixels = np.concatenate([[0], pixels, [0]])
+    runs = np.where(pixels[1:] != pixels[:-1])[0] + 1
+    runs[1::2] -= runs[::2]
+    return " ".join(str(x) for x in runs)
 
 
 def decode_rle(rle_str: str, height: int = 2048, width: int = 2048) -> np.ndarray:
     """
-    Decodes a COCO RLE string back into a binary numpy array of (height, width).
+    Decodes a space-separated Kaggle RLE string OR COCO RLE string back into a binary numpy array of (height, width).
     """
-    rle = {"counts": rle_str.encode("utf-8") if isinstance(rle_str, str) else rle_str, "size": [height, width]}
-    return mask_utils.decode(rle).astype(np.uint8)
+    if not rle_str or (isinstance(rle_str, float) and np.isnan(rle_str)):
+        return np.zeros((height, width), dtype=np.uint8)
+
+    if isinstance(rle_str, str) and (" " in rle_str or rle_str.isdigit()):
+        s = rle_str.split()
+        if not s:
+            return np.zeros((height, width), dtype=np.uint8)
+        starts, lengths = [np.asarray(x, dtype=int) for x in (s[0:][::2], s[1:][::2])]
+        starts -= 1
+        ends = starts + lengths
+        img = np.zeros(height * width, dtype=np.uint8)
+        for lo, hi in zip(starts, ends):
+            img[lo:hi] = 1
+        return img.reshape((width, height)).T
+    else:
+        # COCO RLE format fallback
+        rle = {"counts": rle_str.encode("utf-8") if isinstance(rle_str, str) else rle_str, "size": [height, width]}
+        return mask_utils.decode(rle).astype(np.uint8)
 
 
 def polygon_to_mask(segmentation, height: int = 2048, width: int = 2048) -> np.ndarray:

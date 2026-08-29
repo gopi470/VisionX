@@ -75,6 +75,7 @@ MAGFiLO_1.0_Kaggle_2026/
 data/
 checkpoints/
 outputs/
+submissions/
 *.jpeg
 *.jpg
 *.png

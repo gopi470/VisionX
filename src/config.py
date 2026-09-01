@@ -21,8 +21,10 @@ class V2Config:
     # YOLO NMS IoU threshold
     yolo_nms_iou: float = 0.45
     # CLAHE area filter — skip connected components outside this range (pixels)
-    clahe_min_area: int = 200
-    clahe_max_area: int = 50000
+    clahe_min_area: int = 100
+    clahe_max_area: int = 150000
+    # CLAHE threshold factor relative to mean solar disk brightness (was 0.70 hardcoded, now 0.85 adaptive)
+    clahe_thresh_factor: float = 0.85
 
     # ── Step 3: Fixed-GSD crop extraction ────────────────────────────────────
     # Toggle fixed-GSD variable-size crops (v1 used fixed 1024)

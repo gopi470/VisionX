@@ -236,25 +236,31 @@ class FilamentSegmentationPipeline:
             return []
 
         clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8)).apply(gray_img)
+        disk_pixels = clahe[disk_mask > 0]
+        mean_disk = float(np.mean(disk_pixels))
         
-        # Calculate mean brightness strictly within the solar disk
-        mean_disk = float(np.mean(clahe[disk_mask > 0]))
-        # Solar filaments are dark features (intensity significantly lower than disk average)
-        dark_thresh = int(mean_disk * 0.70)
-        
-        _, dark_mask = cv2.threshold(clahe, dark_thresh, 255, cv2.THRESH_BINARY_INV)
-        dark_mask = cv2.bitwise_and(dark_mask, dark_mask, mask=disk_mask)
-
-        num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(dark_mask, connectivity=8)
+        # Multi-factor adaptive thresholding (0.85 -> 0.90 -> 0.92) to guarantee candidate recall
+        factors = [getattr(self.cfg, "clahe_thresh_factor", 0.85), 0.90, 0.92]
         boxes = []
-        for lbl in range(1, num_labels):
-            area = stats[lbl, cv2.CC_STAT_AREA]
-            if self.cfg.clahe_min_area <= area <= self.cfg.clahe_max_area:
-                bx = stats[lbl, cv2.CC_STAT_LEFT]
-                by = stats[lbl, cv2.CC_STAT_TOP]
-                bw = stats[lbl, cv2.CC_STAT_WIDTH]
-                bh = stats[lbl, cv2.CC_STAT_HEIGHT]
-                boxes.append([float(bx), float(by), float(bw), float(bh), 0.40])
+        
+        for factor in factors:
+            dark_thresh = int(mean_disk * factor)
+            _, dark_mask = cv2.threshold(clahe, dark_thresh, 255, cv2.THRESH_BINARY_INV)
+            dark_mask = cv2.bitwise_and(dark_mask, dark_mask, mask=disk_mask)
+
+            num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(dark_mask, connectivity=8)
+            for lbl in range(1, num_labels):
+                area = stats[lbl, cv2.CC_STAT_AREA]
+                if self.cfg.clahe_min_area <= area <= self.cfg.clahe_max_area:
+                    bx = stats[lbl, cv2.CC_STAT_LEFT]
+                    by = stats[lbl, cv2.CC_STAT_TOP]
+                    bw = stats[lbl, cv2.CC_STAT_WIDTH]
+                    bh = stats[lbl, cv2.CC_STAT_HEIGHT]
+                    boxes.append([float(bx), float(by), float(bw), float(bh), 0.40])
+            
+            if len(boxes) >= 5:
+                break
+
         return boxes
 
 
@@ -337,12 +343,19 @@ class FilamentSegmentationPipeline:
         # resolve_mask_overlaps runs LAST to guarantee ZERO overlapping pixels
         resolved = resolve_mask_overlaps(scored_candidates, min_area=self.cfg.min_mask_area)
 
-        # Safety Fallback: Guarantee at least one valid prediction per image so PQ > 0
-        if len(resolved) == 0 and len(path_a_boxes) > 0:
-            best_box = sorted(path_a_boxes, key=lambda b: -b[4])[0][:4]
-            fb_mask = generate_seed_mask(gray_img.shape[0], gray_img.shape[1], best_box, pad_ratio=0.10)
-            if int(fb_mask.sum()) >= self.cfg.min_mask_area:
-                resolved = [fb_mask]
+        # Safety Fallback: Guarantee valid non-zero predictions per image so PQ > 0
+        if len(resolved) == 0:
+            candidate_boxes = merged_boxes if len(merged_boxes) > 0 else path_b_boxes
+            if len(candidate_boxes) > 0:
+                best_boxes = sorted(candidate_boxes, key=lambda b: -b[4])[:5]
+                fb_masks = []
+                for b_box in best_boxes:
+                    bbox = b_box[:4]
+                    fb_mask = generate_seed_mask(gray_img.shape[0], gray_img.shape[1], bbox, pad_ratio=0.10)
+                    if int(fb_mask.sum()) >= self.cfg.min_mask_area:
+                        fb_masks.append(fb_mask)
+                if len(fb_masks) > 0:
+                    resolved = resolve_mask_overlaps([(0.5, m) for m in fb_masks], min_area=self.cfg.min_mask_area)
 
         return resolved
 

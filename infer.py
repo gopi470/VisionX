@@ -47,6 +47,10 @@ def parse_args():
                    help="Use fixed crop_size instead of GSD-adaptive sizing")
     p.add_argument("--no_boundary_head", action="store_true")
     p.add_argument("--no_skeleton_repair", action="store_true")
+    p.add_argument("--verbose", action="store_true", default=True,
+                   help="Enable detailed per-image live console progress logging")
+    p.add_argument("--quiet", action="store_true",
+                   help="Disable per-image verbose progress logging")
     # Ensemble
     p.add_argument("--ensemble", action="store_true",
                    help="Enable EnsemblePipeline with a secondary model")
@@ -115,6 +119,7 @@ def _load_refiner(weights_path: str, encoder_name: str, in_channels: int,
 
 def main():
     args = parse_args()
+    verbose = args.verbose and not args.quiet
     data_root = Path(args.data_root)
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)

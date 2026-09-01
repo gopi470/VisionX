@@ -131,9 +131,11 @@ class FilamentSegmentationPipeline:
                 tb = tensor_b
 
             augments = [tb]
-            if n >= 3:
+            if n == 3:
                 augments.append(torch.flip(tb, dims=[3]))   # hflip
                 augments.append(torch.flip(tb, dims=[2]))   # vflip
+            elif n >= 6:
+                augments.append(torch.flip(tb, dims=[3]))   # hflip only
 
             for i, aug in enumerate(augments):
                 logits = self.refiner(aug)
@@ -446,7 +448,7 @@ class EnsemblePipeline:
         self.primary = primary
         self.secondary = secondary
 
-    def predict_image(self, image_path: Path) -> list:
+    def predict_image(self, image_path: Path, verbose: bool = False) -> list:
         gray_img = cv2.imread(str(image_path), cv2.IMREAD_GRAYSCALE)
         if gray_img is None:
             raise FileNotFoundError(f"Image not found: {image_path}")
@@ -515,6 +517,14 @@ class EnsemblePipeline:
 
             full_mask = np.zeros((h, w), dtype=np.uint8)
             full_mask[y0:y1_c, x0:x1_c] = cv2.resize(binary_crop, (x1_c - x0, y1_c - y0), interpolation=cv2.INTER_NEAREST)
+
+            if int(full_mask.sum()) >= cfg.min_mask_area:
+                scored_candidates.append((conf_val, full_mask))
+            else:
+                seed_mask = generate_seed_mask(h, w, bbox, pad_ratio=0.10)
+                if int(seed_mask.sum()) >= cfg.min_mask_area:
+                    scored_candidates.append((conf_val * 0.5, seed_mask))
+
         if cfg.use_skeleton_repair:
             repaired_candidates = []
             for score, mask in scored_candidates:
@@ -524,5 +534,19 @@ class EnsemblePipeline:
             scored_candidates = repaired_candidates
 
         resolved = resolve_mask_overlaps(scored_candidates, min_area=cfg.min_mask_area)
+
+        if len(resolved) == 0:
+            candidate_boxes = merged_boxes if len(merged_boxes) > 0 else path_b_boxes
+            if len(candidate_boxes) > 0:
+                best_boxes = sorted(candidate_boxes, key=lambda b: -b[4])[:5]
+                fb_masks = []
+                for b_box in best_boxes:
+                    bbox = b_box[:4]
+                    fb_mask = generate_seed_mask(h, w, bbox, pad_ratio=0.10)
+                    if int(fb_mask.sum()) >= cfg.min_mask_area:
+                        fb_masks.append(fb_mask)
+                if len(fb_masks) > 0:
+                    resolved = resolve_mask_overlaps([(0.5, m) for m in fb_masks], min_area=cfg.min_mask_area)
+
         return resolved
 

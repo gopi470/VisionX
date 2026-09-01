@@ -203,15 +203,21 @@ def main():
     # ── Inference loop ────────────────────────────────────────────────────────
     submission_rows = []
     t_start = time.time()
-    print("Running inference...")
-    for path in tqdm(test_image_paths, desc="Inference"):
+    total_imgs = len(test_image_paths)
+    print(f"\n🚀 Running Inference on {total_imgs} images...\n", flush=True)
+
+    for idx, path in enumerate(test_image_paths, start=1):
+        if verbose:
+            print(f"[{idx}/{total_imgs}] 🖼️ Image: {path.name}", flush=True)
         image_stem = path.stem
-        predicted_masks = active_pipeline.predict_image(path)
+        predicted_masks = active_pipeline.predict_image(path, verbose=verbose)
         for i, mask in enumerate(predicted_masks, start=1):
             submission_rows.append({
                 "filament_id": f"{image_stem}_{i}",
                 "segmentation_rle": encode_rle(mask),
             })
+        if verbose:
+            print(f"   💾 Recorded {len(predicted_masks)} filament rows.\n", flush=True)
 
     t_elapsed = time.time() - t_start
     print(f"\nInference complete: {t_elapsed:.1f}s total "

@@ -266,7 +266,7 @@ class FilamentSegmentationPipeline:
 
     # ── Main predict ──────────────────────────────────────────────────────────
 
-    def predict_image(self, image_path: Path) -> list:
+    def predict_image(self, image_path: Path, verbose: bool = False) -> list:
         gray_img = cv2.imread(str(image_path), cv2.IMREAD_GRAYSCALE)
         if gray_img is None:
             raise FileNotFoundError(f"Image not found: {image_path}")
@@ -316,6 +316,9 @@ class FilamentSegmentationPipeline:
         merged_boxes = _nms_merge(path_a_boxes, path_b_boxes, iou_thresh=self.cfg.proposal_nms_iou)
         logger.debug(f"  Merged: PathA={len(path_a_boxes)} + PathB={len(path_b_boxes)} → {len(merged_boxes)} after NMS")
 
+        if verbose:
+            print(f"   ├─ 🔍 Candidate Proposal: Path A (YOLO)={len(path_a_boxes)}, Path B (CLAHE)={len(path_b_boxes)} -> Merged NMS={len(merged_boxes)}", flush=True)
+
         # ── Stage 2: Refine each candidate ────────────────────────────────────
         scored_candidates = []
         for box in sorted(merged_boxes, key=lambda b: -b[4]):
@@ -330,6 +333,9 @@ class FilamentSegmentationPipeline:
                 seed_mask = generate_seed_mask(gray_img.shape[0], gray_img.shape[1], bbox, pad_ratio=0.10)
                 if int(seed_mask.sum()) >= self.cfg.min_mask_area:
                     scored_candidates.append((conf_val * 0.5, seed_mask))
+
+        if verbose:
+            print(f"   ├─ ⚙️ Refinement: Processed {len(merged_boxes)} crops -> Valid Candidates={len(scored_candidates)}", flush=True)
 
         # ── Step 7: Correct execution order to prevent overlapping masks ───
         if self.cfg.use_skeleton_repair:
@@ -356,6 +362,9 @@ class FilamentSegmentationPipeline:
                         fb_masks.append(fb_mask)
                 if len(fb_masks) > 0:
                     resolved = resolve_mask_overlaps([(0.5, m) for m in fb_masks], min_area=self.cfg.min_mask_area)
+
+        if verbose:
+            print(f"   └─ ✨ Post-Processing: Resolved Overlaps & Skeleton Gaps -> {len(resolved)} Final Filament Instances", flush=True)
 
         return resolved
 
